@@ -1,0 +1,570 @@
+# Contrato GraphQL de Cozy (fase 9, paso 9.5a). Versión 1.0.0 (SemVer, §6 del diseño).
+#
+# No inventa datos: cada tipo copia, campo por campo, la respuesta v1 del servicio dueño. Los nombres de campo son los de la
+# ruta REST v1 que cada operación llama (por ejemplo, las fichas públicas traen `name`, `city` y `rooms`, como /details,
+# y las de administración traen `nombre`, `ciudad` y `precioPorNoche`, como /admin/alojamientos), de modo que la UI conserva
+# los mapeos que hoy hace sobre esas respuestas.
+#
+# El control de acceso de cada operación se aplica primero en `graphql`, pero la regla final la sigue poniendo cada servicio.
+# Los errores van en `errors[]` con el ProblemDetails del servicio en `extensions` (`code`, `status`, `detail`, `instance`,
+# `problem`). Todas las operaciones son nullables en la raíz para permitir `data` parcial cuando una falla.
+
+"""JSON libre (objetos que la v1 deja abiertos: políticas, huéspedes, enlaces HATEOAS)."""
+scalar JSON
+
+type Query {
+  # ── Catálogo (público) ──
+  """POST /details: fichas de alojamientos activos (sin ids, todos). Público."""
+  alojamientos(filtro: FiltroAlojamientosInput): [Alojamiento!]
+  """POST /details con un id. Público."""
+  alojamiento(id: Int!): Alojamiento
+  """POST /search + POST /details + POST /availability en una sola respuesta. Público."""
+  buscarAlojamientos(criterio: CriterioBusquedaInput!): ResultadoBusqueda
+  """POST /availability (catalogo la resuelve con disponibilidad, como la v1 de hoy). Público."""
+  disponibilidad(
+    alojamientoId: Int!
+    checkin: String!
+    checkout: String!
+    guests: HuespedesInput!
+    booker: BookerInput
+    currency: String
+    extras: [String!]
+  ): Disponibilidad
+
+  # ── Catálogo (administrador o superadmin) ──
+  """GET /admin/alojamientos"""
+  alojamientosAdmin(filtro: FiltroAlojamientosAdminInput): PaginaAlojamientosAdmin
+  """GET /admin/alojamientos/:id (también los dados de baja)"""
+  alojamientoAdmin(id: Int!, incluirInactivas: Boolean): AlojamientoAdmin
+  """GET /admin/ciudades"""
+  ciudades: [Ciudad!]
+  """GET /admin/alojamientos/:alojamientoId/habitaciones"""
+  habitaciones(alojamientoId: Int!, incluirInactivas: Boolean): [Habitacion!]
+  """GET /admin/habitaciones/:id"""
+  habitacion(id: ID!): Habitacion
+
+  # ── Disponibilidad (administrador o superadmin) ──
+  """GET /admin/habitaciones/:id/disponibilidad (desde y hasta incluidos, máximo 366 días)"""
+  disponibilidadAdmin(habitacionId: ID!, desde: String!, hasta: String!): DisponibilidadAdmin
+
+  # ── Reservas ──
+  """GET /orders/:orderId. Público, con sesión opcional."""
+  orden(id: ID!): Orden
+  """GET /cuenta/reservas. Cuenta con sesión."""
+  misReservas(filtro: FiltroReservasInput): PaginaOrdenes
+  """GET /cuenta/reservas/:localizador. Cuenta con sesión."""
+  miReserva(localizador: String!): Orden
+  """POST /cuenta/consultar-reserva. Público, con límite de intentos por IP del navegador."""
+  consultarReserva(localizador: String!, correo: String!): Orden
+  """GET /admin/reservas. Administrador o superadmin."""
+  reservasAdmin(filtro: FiltroReservasAdminInput): PaginaReservasAdmin
+
+  # ── Usuarios ──
+  """GET /auth/me. Cuenta con sesión."""
+  yo: Usuario
+  """GET /admin/usuarios. Solo superadmin."""
+  usuariosAdmin(filtro: FiltroUsuariosInput): PaginaUsuarios
+}
+
+type Mutation {
+  # ── Catálogo (administrador o superadmin) ──
+  """POST /admin/alojamientos: quien lo crea queda como propietario."""
+  crearAlojamiento(datos: DatosAlojamientoInput!): AlojamientoAdmin
+  """PATCH /admin/alojamientos/:id: solo cambian los campos enviados."""
+  actualizarAlojamiento(id: Int!, datos: ActualizarAlojamientoInput!): AlojamientoAdmin
+  """DELETE /admin/alojamientos/:id: borrado lógico. Devuelve true (la ruta responde 204)."""
+  eliminarAlojamiento(id: Int!): Boolean
+  """POST /admin/ciudades"""
+  crearCiudad(datos: DatosCiudadInput!): Ciudad
+  """POST /admin/alojamientos/:alojamientoId/habitaciones"""
+  crearHabitacion(alojamientoId: Int!, datos: DatosHabitacionInput!): Habitacion
+  """PATCH /admin/habitaciones/:id"""
+  actualizarHabitacion(id: ID!, datos: ActualizarHabitacionInput!): Habitacion
+  """POST /admin/habitaciones/:id/desactivar"""
+  desactivarHabitacion(id: ID!): Habitacion
+  """POST /admin/habitaciones/:id/reactivar"""
+  reactivarHabitacion(id: ID!): Habitacion
+
+  # ── Disponibilidad (administrador o superadmin) ──
+  """PATCH /admin/habitaciones/:id/disponibilidad: todo o nada; con dryRun no guarda."""
+  editarDisponibilidad(habitacionId: ID!, datos: EdicionDisponibilidadInput!): EdicionDisponibilidad
+
+  # ── Reservas ──
+  """POST /orders/preview. Público, con sesión opcional."""
+  cotizarOrden(solicitud: SolicitudCotizacionInput!): Cotizacion
+  """POST /orders/create con Idempotency-Key. Público, con sesión opcional: con token válido la orden queda en la cuenta."""
+  crearOrden(idempotencyKey: String!, solicitud: SolicitudOrdenInput!): Orden
+  """POST /orders/:orderId/cancel. Si no se manda idempotencyKey, graphql genera uno."""
+  cancelarOrden(id: ID!, idempotencyKey: String): Orden
+  """POST /admin/reservas/:id/cancelar. Administrador o superadmin."""
+  cancelarReservaAdmin(id: ID!): Orden
+
+  # ── Usuarios ──
+  """POST /auth/registro. Público."""
+  registrarse(datos: RegistroInput!): Usuario
+  """POST /auth/login. Público, con límite de intentos por correo e IP del navegador."""
+  iniciarSesion(email: String!, password: String!): Sesion
+  """POST /auth/renovar con el Bearer vigente. Cuenta con sesión."""
+  renovarSesion: Sesion
+  """POST /admin/usuarios/:id/aprobar. Solo superadmin."""
+  aprobarUsuario(id: ID!): Usuario
+  """POST /admin/usuarios/:id/suspender. Solo superadmin."""
+  suspenderUsuario(id: ID!): Usuario
+  """POST /admin/usuarios/:id/reactivar. Solo superadmin."""
+  reactivarUsuario(id: ID!): Usuario
+  """PATCH /admin/usuarios/:id/rol. Solo superadmin."""
+  cambiarRolUsuario(id: ID!, rol: String!): Usuario
+}
+
+# ───────────────────────── Tipos de salida ─────────────────────────
+
+type PaginaMeta {
+  totalItems: Int!
+  itemCount: Int!
+  itemsPerPage: Int!
+  totalPages: Int!
+  currentPage: Int!
+}
+
+# Catálogo (dueño: catalogo)
+
+type Ciudad {
+  id: Int!
+  nombre: String!
+  pais: String!
+}
+
+type CiudadFicha {
+  id: Int!
+  name: String!
+  country: String!
+}
+
+type HabitacionFicha {
+  product_id: String!
+  name: String!
+  type: String!
+  max_adults: Int!
+  max_children: Int!
+  base_price: Float!
+  meal_plan: String
+  cancellation_type: String
+}
+
+"""Ficha pública de un alojamiento (AccommodationDetailsItem de /details)."""
+type Alojamiento {
+  id: Int!
+  name: String!
+  city: CiudadFicha
+  currency: String!
+  description: String
+  photos: [String!]
+  facilities: [String!]
+  policies: JSON
+  rooms: [HabitacionFicha!]
+}
+
+"""Alojamiento de administración (AlojamientoResponse de /admin/alojamientos)."""
+type AlojamientoAdmin {
+  id: Int!
+  nombre: String!
+  destino: String!
+  ciudadId: Int
+  ciudad: Ciudad
+  descripcion: String
+  moneda: String!
+  precioPorNoche: Float!
+  capacidadAdultos: Int!
+  capacidadNinos: Int!
+  habitaciones: Int!
+  tienePiscina: Boolean!
+  fotos: [String!]
+  facilidades: [String!]
+  politicas: JSON
+  activo: Boolean!
+  updatedAt: String!
+  codigo: String!
+  estrellas: Int!
+  tipoPropiedad: String!
+  direccion: String
+  latitud: Float
+  longitud: Float
+  _links: JSON
+}
+
+type PaginaAlojamientosAdmin {
+  data: [AlojamientoAdmin!]!
+  meta: PaginaMeta!
+  _links: JSON
+}
+
+type Habitacion {
+  id: ID!
+  alojamientoId: Int!
+  nombre: String!
+  tipo: String!
+  capacidadAdultos: Int!
+  capacidadNinos: Int!
+  precioBase: Float!
+  mealPlan: String
+  cancellationType: String
+  activo: Boolean!
+  codigo: String!
+  descripcion: String
+  camas: String
+  metrosCuadrados: Int
+  fotos: [String!]
+  amenidades: [String!]
+  _links: JSON
+}
+
+# Disponibilidad (dueño: disponibilidad; /availability la resuelve catalogo)
+
+type PrecioNoche {
+  date: String!
+  price: Float!
+}
+
+type PrecioOpcion {
+  currency: String!
+  total: Float!
+  nights: [PrecioNoche!]!
+}
+
+"""Oferta concreta: habitación más fechas (product_id), con cupo y precio."""
+type OpcionDisponibilidad {
+  product_id: String!
+  name: String!
+  type: String!
+  meal_plan: String
+  cancellation_type: String
+  max_adults: Int!
+  max_children: Int!
+  rooms_left: Int!
+  price: PrecioOpcion!
+}
+
+type Disponibilidad {
+  id: Int!
+  currency: String!
+  products: [OpcionDisponibilidad!]!
+  url: String!
+}
+
+type AlojamientoBuscado {
+  alojamiento: Alojamiento!
+  disponibilidad: Disponibilidad!
+  """La opción más barata multiplicada por las habitaciones pedidas."""
+  precioEstancia: Float!
+}
+
+type ResultadoBusqueda {
+  data: [AlojamientoBuscado!]!
+  next_page: String
+}
+
+type DiaDisponibilidad {
+  fecha: String!
+  cuposTotales: Int!
+  cupos: Int!
+  vendidas: Int!
+  precio: Float!
+}
+
+type DisponibilidadAdmin {
+  habitacionId: ID!
+  desde: String!
+  hasta: String!
+  dias: [DiaDisponibilidad!]!
+}
+
+type CambioDisponibilidad {
+  fecha: String!
+  accion: String!
+  antes: DiaDisponibilidad
+  despues: DiaDisponibilidad!
+}
+
+type ResumenCambios {
+  creados: Int!
+  actualizados: Int!
+  sinCambios: Int!
+}
+
+type EdicionDisponibilidad {
+  habitacionId: ID!
+  dryRun: Boolean!
+  resumen: ResumenCambios!
+  cambios: [CambioDisponibilidad!]!
+}
+
+# Reservas (dueño: reservas; el alojamiento lo trae catalogo)
+
+type Cotizacion {
+  order_preview_id: String!
+  total_price: Float!
+  currency: String!
+}
+
+type DetalleAlojamientoOrden {
+  accommodation_id: Int!
+  name: String!
+  product_id: String!
+  room_name: String!
+  cancellation_type: String
+  checkin: String!
+  checkout: String!
+  nights: Int!
+  rooms: Int!
+  guests: JSON
+}
+
+type Orden {
+  order_id: ID!
+  locator: String!
+  status: String!
+  accommodation_details: DetalleAlojamientoOrden!
+  total_price: Float!
+  currency: String!
+  creation_date: String!
+  _links: JSON
+  """Ficha del alojamiento: la pide graphql a catalogo (POST /details), en lote por petición."""
+  alojamiento: Alojamiento
+}
+
+type PaginaOrdenes {
+  data: [Orden!]!
+  meta: PaginaMeta!
+}
+
+type ClienteReserva {
+  first_name: String!
+  last_name: String!
+  email: String!
+}
+
+"""Reserva vista por el administrador: la orden más quién reservó."""
+type ReservaAdmin {
+  order_id: ID!
+  locator: String!
+  status: String!
+  accommodation_details: DetalleAlojamientoOrden!
+  total_price: Float!
+  currency: String!
+  creation_date: String!
+  _links: JSON
+  customer_details: ClienteReserva!
+  cliente_id: ID
+  alojamiento: Alojamiento
+}
+
+type PaginaReservasAdmin {
+  data: [ReservaAdmin!]!
+  meta: PaginaMeta!
+}
+
+# Usuarios (dueño: usuarios)
+
+type Usuario {
+  id: ID!
+  email: String!
+  nombre: String!
+  apellido: String!
+  rol: String!
+  estado: String!
+  createdAt: String!
+}
+
+"""Lo que emitió usuarios (graphql nunca firma tokens)."""
+type Sesion {
+  access_token: String!
+  token_type: String!
+  expires_in: Int!
+  usuario: Usuario!
+}
+
+type PaginaUsuarios {
+  data: [Usuario!]!
+  meta: PaginaMeta!
+}
+
+# ───────────────────────── Entradas ─────────────────────────
+
+input AsignacionHuespedesInput {
+  adults: Int
+  children: [Int!]
+}
+
+input HuespedesInput {
+  number_of_adults: Int!
+  number_of_rooms: Int!
+  children: [Int!]
+  allocation: [AsignacionHuespedesInput!]
+}
+
+input BookerInput {
+  country: String!
+  platform: String!
+  state: String
+  travel_purpose: String
+  user_groups: [String!]
+}
+
+input FiltroAlojamientosInput {
+  accommodations: [Int!]
+  city: Int
+  country: String
+  extras: [String!]
+  languages: [String!]
+}
+
+input CriterioBusquedaInput {
+  checkin: String!
+  checkout: String!
+  city: Int
+  country: String
+  guests: HuespedesInput!
+  booker: BookerInput
+  extras: [String!]
+  currency: String
+  rows: Int
+  page: String
+}
+
+input FiltroAlojamientosAdminInput {
+  ciudadId: Int
+  activo: Boolean
+  incluirInactivas: Boolean
+  page: Int
+  limit: Int
+}
+
+input DatosCiudadInput {
+  nombre: String!
+  pais: String!
+}
+
+input DatosAlojamientoInput {
+  nombre: String!
+  ciudadId: Int!
+  descripcion: String
+  moneda: String
+  precioPorNoche: Float!
+  capacidadAdultos: Int!
+  capacidadNinos: Int!
+  tienePiscina: Boolean!
+  fotos: [String!]
+  facilidades: [String!]
+  politicas: JSON
+  activo: Boolean
+  estrellas: Int
+  tipoPropiedad: String
+  direccion: String
+  latitud: Float
+  longitud: Float
+}
+
+input ActualizarAlojamientoInput {
+  nombre: String
+  ciudadId: Int
+  descripcion: String
+  moneda: String
+  precioPorNoche: Float
+  capacidadAdultos: Int
+  capacidadNinos: Int
+  tienePiscina: Boolean
+  fotos: [String!]
+  facilidades: [String!]
+  politicas: JSON
+  activo: Boolean
+  estrellas: Int
+  tipoPropiedad: String
+  direccion: String
+  latitud: Float
+  longitud: Float
+}
+
+input DatosHabitacionInput {
+  nombre: String!
+  tipo: String!
+  capacidadAdultos: Int!
+  capacidadNinos: Int!
+  precioBase: Float!
+  mealPlan: String
+  cancellationType: String
+  descripcion: String
+  camas: String
+  metrosCuadrados: Int
+  fotos: [String!]
+  amenidades: [String!]
+}
+
+input ActualizarHabitacionInput {
+  nombre: String
+  tipo: String
+  capacidadAdultos: Int
+  capacidadNinos: Int
+  precioBase: Float
+  mealPlan: String
+  cancellationType: String
+  descripcion: String
+  camas: String
+  metrosCuadrados: Int
+  fotos: [String!]
+  amenidades: [String!]
+}
+
+input EdicionDisponibilidadInput {
+  desde: String!
+  hasta: String!
+  cuposTotales: Int
+  precio: Float
+  dryRun: Boolean
+  diasSemana: [Int!]
+}
+
+input SolicitudCotizacionInput {
+  accommodation_id: Int!
+  product_id: String!
+  guests: HuespedesInput!
+}
+
+input DatosClienteInput {
+  first_name: String!
+  last_name: String!
+  email: String!
+}
+
+input SolicitudOrdenInput {
+  order_preview_id: String!
+  payment_reference: String!
+  customer_details: DatosClienteInput!
+}
+
+input FiltroReservasInput {
+  estado: String
+  page: Int
+  limit: Int
+}
+
+input FiltroReservasAdminInput {
+  estado: String
+  alojamientoId: Int
+  page: Int
+  limit: Int
+}
+
+input RegistroInput {
+  email: String!
+  password: String!
+  nombre: String!
+  apellido: String!
+  rol: String
+}
+
+input FiltroUsuariosInput {
+  rol: String
+  estado: String
+  page: Int
+  limit: Int
+}
