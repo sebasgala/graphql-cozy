@@ -5,9 +5,9 @@ import { errorPropio } from './problemas';
 // graphql nunca firma. Orden de resolución de la clave: JWT_PUBLIC_KEY, la que publica usuarios en
 // /api/v1/interno/usuarios/clave-publica y, solo para pruebas sin par RSA, JWT_SECRET (HS256, mínimo 32 caracteres).
 
-export type RolSesion = 'cliente' | 'administrador' | 'superadmin';
+export type RolSesion = 'cliente' | 'administrador' | 'superadmin' | 'recepcion';
 export type EstadoSesion = 'activo' | 'pendiente' | 'suspendido';
-export type Acceso = 'publico' | 'opcional' | 'sesion' | 'admin' | 'superadmin';
+export type Acceso = 'publico' | 'opcional' | 'sesion' | 'recepcion' | 'admin' | 'superadmin';
 
 export interface Sesion {
   id: string;
@@ -16,11 +16,13 @@ export interface Sesion {
 }
 
 const ES_UUID = /^[0-9a-f-]{36}$/i;
-const ROLES: RolSesion[] = ['cliente', 'administrador', 'superadmin'];
+const ROLES: RolSesion[] = ['cliente', 'administrador', 'superadmin', 'recepcion'];
 const ESTADOS: EstadoSesion[] = ['activo', 'pendiente', 'suspendido'];
 
+// recepcion (Bloque R) solo entra a `sesion` y `recepcion`: nunca a catálogo, precios ni usuarios
 export const ROLES_POR_ACCESO: Record<Exclude<Acceso, 'publico' | 'opcional'>, RolSesion[]> = {
-  sesion: ['cliente', 'administrador', 'superadmin'],
+  sesion: ['cliente', 'administrador', 'superadmin', 'recepcion'],
+  recepcion: ['recepcion', 'administrador', 'superadmin'],
   admin: ['administrador', 'superadmin'],
   superadmin: ['superadmin'],
 };

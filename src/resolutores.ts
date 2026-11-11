@@ -2,7 +2,7 @@ import { GraphQLObjectType, GraphQLSchema } from 'graphql';
 import { Acceso, exigirAcceso } from './seguridad';
 import { ContextoGraphql, llamarServicio, nuevaClaveDeIdempotencia, seg } from './servicios';
 
-// Las 37 operaciones de §3 (17 consultas y 20 mutaciones). Cada resolver:
+// Las 37 operaciones de §3 (17 consultas y 20 mutaciones) más las 9 de recepción del Bloque R. Cada resolver:
 //   1. aplica el control temprano de la columna «Acceso» de §9 (sin llamar a nadie si no pasa);
 //   2. llama directo a la ruta v1 del servicio dueño, reenviando el Authorization original.
 // La regla final la sigue poniendo cada servicio.
@@ -255,6 +255,53 @@ export const OPERACIONES: Record<string, Operacion> = {
     tipo: 'Mutation',
     acceso: 'admin',
     resolver: (a, c) => reservas(c, 'POST', `/admin/reservas/${seg(a.id)}/cancelar`),
+  },
+
+  // ───────────────────────── Recepción (Bloque R) ─────────────────────────
+  contextoRecepcion: {
+    tipo: 'Query',
+    acceso: 'recepcion',
+    resolver: (_a, c) => reservas(c, 'GET', '/admin/recepcion/contexto'),
+  },
+  reservasRecepcion: {
+    tipo: 'Query',
+    acceso: 'recepcion',
+    resolver: (a, c) => reservas(c, 'GET', '/admin/recepcion/reservas', { consulta: a.filtro ?? {} }),
+  },
+  habitacionesReasignables: {
+    tipo: 'Query',
+    acceso: 'recepcion',
+    resolver: (a, c) => reservas(c, 'GET', `/admin/recepcion/reservas/${seg(a.id)}/habitaciones`),
+  },
+  auditoriaRecepcion: {
+    tipo: 'Query',
+    acceso: 'recepcion',
+    resolver: (a, c) => reservas(c, 'GET', `/admin/recepcion/reservas/${seg(a.id)}/auditoria`),
+  },
+  aprobarCheckinRecepcion: {
+    tipo: 'Mutation',
+    acceso: 'recepcion',
+    resolver: (a, c) => reservas(c, 'POST', `/admin/recepcion/reservas/${seg(a.id)}/checkin-aprobado`, { cuerpo: a.datos }),
+  },
+  reasignarHabitacionRecepcion: {
+    tipo: 'Mutation',
+    acceso: 'recepcion',
+    resolver: (a, c) => reservas(c, 'POST', `/admin/recepcion/reservas/${seg(a.id)}/reasignar-habitacion`, { cuerpo: a.datos }),
+  },
+  cambiarHuespedesRecepcion: {
+    tipo: 'Mutation',
+    acceso: 'recepcion',
+    resolver: (a, c) => reservas(c, 'POST', `/admin/recepcion/reservas/${seg(a.id)}/huespedes`, { cuerpo: a.datos }),
+  },
+  cambiarObservacionesRecepcion: {
+    tipo: 'Mutation',
+    acceso: 'recepcion',
+    resolver: (a, c) => reservas(c, 'POST', `/admin/recepcion/reservas/${seg(a.id)}/observaciones`, { cuerpo: a.datos }),
+  },
+  autorizarEarlyCheckin: {
+    tipo: 'Mutation',
+    acceso: 'admin',
+    resolver: (a, c) => reservas(c, 'POST', `/admin/recepcion/reservas/${seg(a.id)}/early-checkin`, { cuerpo: a.datos ?? {} }),
   },
 
   // ───────────────────────── Usuarios ─────────────────────────

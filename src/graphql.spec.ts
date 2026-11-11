@@ -5,7 +5,7 @@ import { describe, it } from 'node:test';
 import { JwtService } from '@nestjs/jwt';
 import { errorPropio } from './problemas';
 import { OPERACIONES } from './resolutores';
-import { Acceso, exigirAcceso, Sesion, traeScope } from './seguridad';
+import { Acceso, exigirAcceso, ROLES_POR_ACCESO, Sesion, traeScope } from './seguridad';
 import { cargarEsquema, ServidorGraphql } from './servidor';
 
 describe('graphql (fase 9, paso 9.5a)', () => {
@@ -19,7 +19,7 @@ describe('graphql (fase 9, paso 9.5a)', () => {
   const firmarToken = (carga: Record<string, unknown>, clavePrivada = parRsa.privateKey): string =>
     jwt.sign(carga, { privateKey: clavePrivada, algorithm: 'RS256' });
 
-  it('1. schema.graphql tiene exactamente las 37 operaciones de §3 (17 queries, 20 mutations)', () => {
+  it('1. schema.graphql tiene exactamente las 46 operaciones (§3 + 9 de recepción del Bloque R: 21 queries, 25 mutations)', () => {
     const schema = cargarEsquema();
     const queryFields = schema.getQueryType()?.getFields() ?? {};
     const mutationFields = schema.getMutationType()?.getFields() ?? {};
@@ -27,9 +27,9 @@ describe('graphql (fase 9, paso 9.5a)', () => {
     const queries = Object.keys(queryFields);
     const mutations = Object.keys(mutationFields);
 
-    assert.equal(queries.length, 17, `Esperadas 17 queries, encontradas ${queries.length}: ${queries.join(', ')}`);
-    assert.equal(mutations.length, 20, `Esperadas 20 mutaciones, encontradas ${mutations.length}: ${mutations.join(', ')}`);
-    assert.equal(Object.keys(OPERACIONES).length, 37, 'OPERACIONES debe registrar 37 resolutores');
+    assert.equal(queries.length, 21, `Esperadas 21 queries, encontradas ${queries.length}: ${queries.join(', ')}`);
+    assert.equal(mutations.length, 25, `Esperadas 25 mutaciones, encontradas ${mutations.length}: ${mutations.join(', ')}`);
+    assert.equal(Object.keys(OPERACIONES).length, 46, 'OPERACIONES debe registrar 46 resolutores');
 
     for (const [nombre, op] of Object.entries(OPERACIONES)) {
       if (op.tipo === 'Query') {
@@ -83,6 +83,23 @@ describe('graphql (fase 9, paso 9.5a)', () => {
       (err: any) => err.extensions?.status === 403 && err.extensions?.code === 'FORBIDDEN',
     );
     assert.doesNotThrow(() => exigirAcceso('superadmin', sesionSuperadmin, true));
+
+    // Bloque R: recepción entra a sus operaciones y nunca a las de administración (catálogo, precios) ni de usuarios
+    const sesionRecepcion: Sesion = { id: '66666666-6666-6666-6666-666666666666', rol: 'recepcion', estado: 'activo' };
+    assert.doesNotThrow(() => exigirAcceso('recepcion', sesionRecepcion, true));
+    assert.doesNotThrow(() => exigirAcceso('recepcion', sesionAdmin, true));
+    assert.doesNotThrow(() => exigirAcceso('sesion', sesionRecepcion, true));
+    for (const acceso of ['admin', 'superadmin'] as const) {
+      assert.throws(() => exigirAcceso(acceso, sesionRecepcion, true), (err: any) => err.extensions?.status === 403 && err.extensions?.code === 'FORBIDDEN');
+    }
+    assert.throws(() => exigirAcceso('recepcion', sesionCliente, true), (err: any) => err.extensions?.status === 403);
+    for (const [nombre, op] of Object.entries(OPERACIONES)) {
+      const esDeRecepcion = /Recepcion$|^habitacionesReasignables$/.test(nombre);
+      if (esDeRecepcion) assert.equal(op.acceso, 'recepcion', `${nombre} debe ser de recepción`);
+      if (['crearAlojamiento', 'editarDisponibilidad', 'actualizarHabitacion', 'aprobarUsuario', 'cambiarRolUsuario', 'autorizarEarlyCheckin'].includes(nombre)) {
+        assert.ok(!ROLES_POR_ACCESO[op.acceso as 'admin']?.includes('recepcion'), `${nombre} no debe admitir recepción`);
+      }
+    }
 
     // Cuentas inactivas
     const sesionPendiente: Sesion = { id: '44444444-4444-4444-4444-444444444444', rol: 'administrador', estado: 'pendiente' };

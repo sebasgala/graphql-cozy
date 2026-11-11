@@ -59,6 +59,16 @@ type Query {
   """GET /admin/reservas. Administrador o superadmin."""
   reservasAdmin(filtro: FiltroReservasAdminInput): PaginaReservasAdmin
 
+  # ── Recepción (Bloque R: recepción, administrador o superadmin; siempre el alojamiento del token) ──
+  """GET /admin/recepcion/contexto: alojamiento de la sesión."""
+  contextoRecepcion: ContextoRecepcion
+  """GET /admin/recepcion/reservas: por fecha de llegada y estado."""
+  reservasRecepcion(filtro: FiltroRecepcionInput): PaginaReservasRecepcion
+  """GET /admin/recepcion/reservas/:id/habitaciones: habitaciones con cupo en las fechas de la reserva."""
+  habitacionesReasignables(id: ID!): [HabitacionReasignable!]
+  """GET /admin/recepcion/reservas/:id/auditoria: auditoría local (no se envía a Booking)."""
+  auditoriaRecepcion(id: ID!): [AuditoriaRecepcion!]
+
   # ── Usuarios ──
   """GET /auth/me. Cuenta con sesión."""
   yo: Usuario
@@ -98,6 +108,18 @@ type Mutation {
   cancelarOrden(id: ID!, idempotencyKey: String): Orden
   """POST /admin/reservas/:id/cancelar. Administrador o superadmin."""
   cancelarReservaAdmin(id: ID!): Orden
+
+  # ── Recepción (Bloque R) ──
+  """POST /admin/recepcion/reservas/:id/checkin-aprobado: desde las 14:00 de Guayaquil o el early autorizado."""
+  aprobarCheckinRecepcion(id: ID!, datos: AprobarCheckinInput!): ReservaRecepcion
+  """POST /admin/recepcion/reservas/:id/reasignar-habitacion: habitación física, sin cambiar el contrato."""
+  reasignarHabitacionRecepcion(id: ID!, datos: ReasignarHabitacionInput!): ReservaRecepcion
+  """POST /admin/recepcion/reservas/:id/huespedes"""
+  cambiarHuespedesRecepcion(id: ID!, datos: CambiarHuespedesInput!): ReservaRecepcion
+  """POST /admin/recepcion/reservas/:id/observaciones"""
+  cambiarObservacionesRecepcion(id: ID!, datos: CambiarObservacionesInput!): ReservaRecepcion
+  """POST /admin/recepcion/reservas/:id/early-checkin. Administrador o superadmin."""
+  autorizarEarlyCheckin(id: ID!, datos: AutorizarEarlyCheckinInput): ReservaRecepcion
 
   # ── Usuarios ──
   """POST /auth/registro. Público."""
@@ -372,7 +394,84 @@ type Usuario {
   apellido: String!
   rol: String!
   estado: String!
+  """Alojamiento de la cuenta (Bloque R). Null para superadmin y clientes."""
+  alojamientoId: Int
+  """true si la cuenta nació con clave temporal."""
+  requiereCambioClave: Boolean
   createdAt: String!
+}
+
+# Recepción (dueño: reservas)
+
+type ContextoRecepcion {
+  alojamientoId: Int
+  alojamientoNombre: String
+  alojamientoCodigo: String
+}
+
+type TitularRecepcion {
+  nombre: String!
+  email: String!
+  tipoDocumento: String
+  documentoRegistrado: Boolean!
+}
+
+type HuespedesRecepcion {
+  adultos: Int!
+  ninos: [Int!]!
+}
+
+type EarlyCheckin {
+  autorizado: Boolean!
+  desde: String
+}
+
+type ReservaRecepcion {
+  orderId: ID!
+  locator: String!
+  codigoReserva: String!
+  estado: String!
+  alojamientoId: Int!
+  alojamientoNombre: String!
+  habitacionId: ID!
+  habitacionNombre: String!
+  habitacionAsignada: String
+  llegada: String!
+  salida: String!
+  noches: Int!
+  habitaciones: Int!
+  titular: TitularRecepcion!
+  huespedes: HuespedesRecepcion!
+  observaciones: String
+  earlyCheckin: EarlyCheckin!
+  checkinHabilitadoDesde: String!
+  checkinCierraEn: String!
+  checkInEn: String
+}
+
+type PaginaReservasRecepcion {
+  data: [ReservaRecepcion!]!
+  meta: PaginaMeta!
+}
+
+type HabitacionReasignable {
+  id: ID!
+  nombre: String!
+  tipo: String!
+  actual: Boolean!
+}
+
+type AuditoriaRecepcion {
+  id: ID!
+  alojamientoId: Int!
+  reservaId: ID!
+  usuarioId: ID!
+  rol: String!
+  accion: String!
+  motivo: String
+  datosPrevios: JSON
+  datosNuevos: JSON
+  creadoEn: String!
 }
 
 """Lo que emitió usuarios (graphql nunca firma tokens)."""
@@ -567,4 +666,43 @@ input FiltroUsuariosInput {
   estado: String
   page: Int
   limit: Int
+}
+
+input FiltroRecepcionInput {
+  estado: String
+  llegadaDesde: String
+  llegadaHasta: String
+  alojamientoId: Int
+  page: Int
+  limit: Int
+}
+
+input AprobarCheckinInput {
+  documentoPresentado: String!
+  huespedesPresentes: Int!
+  codigoRecepcionista: String!
+  observaciones: String
+  documentoVerificadoFisicamente: Boolean!
+}
+
+input ReasignarHabitacionInput {
+  habitacionId: ID!
+  etiqueta: String
+  motivo: String
+}
+
+input CambiarHuespedesInput {
+  adultos: Int!
+  ninos: [Int!]
+  motivo: String
+}
+
+input CambiarObservacionesInput {
+  observaciones: String!
+  motivo: String
+}
+
+input AutorizarEarlyCheckinInput {
+  desde: String
+  motivo: String
 }
