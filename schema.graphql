@@ -669,6 +669,8 @@ input FiltroUsuariosInput {
 }
 
 input FiltroRecepcionInput {
+  """true = CONFIRMED sin check-in con la estancia vigente (vista por defecto del mostrador)"""
+  pendientesCheckin: Boolean
   estado: String
   llegadaDesde: String
   llegadaHasta: String
