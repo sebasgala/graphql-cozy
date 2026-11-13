@@ -303,6 +303,22 @@ export const OPERACIONES: Record<string, Operacion> = {
     acceso: 'admin',
     resolver: (a, c) => reservas(c, 'POST', `/admin/recepcion/reservas/${seg(a.id)}/early-checkin`, { cuerpo: a.datos ?? {} }),
   },
+  marcarLimpiezaLista: {
+    tipo: 'Mutation',
+    acceso: 'recepcion',
+    resolver: (a, c) =>
+      reservas(c, 'POST', `/admin/recepcion/reservas/${seg(a.reservaId)}/habitacion-limpia`, {
+        cuerpo: {
+          ...(a.habitacionFisicaId && { habitacionFisicaId: a.habitacionFisicaId }),
+          ...(a.notas !== undefined && { notas: a.notas }),
+        },
+      }),
+  },
+  archivarReservaRecepcion: {
+    tipo: 'Mutation',
+    acceso: 'recepcion',
+    resolver: (a, c) => reservas(c, 'POST', `/admin/recepcion/reservas/${seg(a.reservaId)}/archivar`, { cuerpo: {} }),
+  },
 
   // ───────────────────────── Usuarios ─────────────────────────
   registrarse: {

@@ -120,6 +120,10 @@ type Mutation {
   cambiarObservacionesRecepcion(id: ID!, datos: CambiarObservacionesInput!): ReservaRecepcion
   """POST /admin/recepcion/reservas/:id/early-checkin. Administrador o superadmin."""
   autorizarEarlyCheckin(id: ID!, datos: AutorizarEarlyCheckinInput): ReservaRecepcion
+  """POST /admin/recepcion/reservas/:id/habitacion-limpia: marca la habitación limpia tras check-out (POR_LIMPIAR → LIMPIA_LISTA)."""
+  marcarLimpiezaLista(reservaId: ID!, habitacionFisicaId: ID, notas: String): ReservaRecepcion!
+  """POST /admin/recepcion/reservas/:id/archivar: archiva la reserva y la saca del tablero (solo CANCELLED o LIMPIA_LISTA)."""
+  archivarReservaRecepcion(reservaId: ID!): ReservaRecepcion!
 
   # ── Usuarios ──
   """POST /auth/registro. Público."""
@@ -447,6 +451,8 @@ type ReservaRecepcion {
   checkinHabilitadoDesde: String!
   checkinCierraEn: String!
   checkInEn: String
+  """true si la reserva fue archivada y retirada del mostrador de recepción."""
+  archivadaRecepcion: Boolean!
 }
 
 type PaginaReservasRecepcion {
@@ -671,7 +677,10 @@ input FiltroUsuariosInput {
 input FiltroRecepcionInput {
   """true = CONFIRMED sin check-in con la estancia vigente (vista por defecto del mostrador)"""
   pendientesCheckin: Boolean
+  """Estado de la reserva (ej. CONFIRMED, CHECKED_IN, POR_LIMPIAR, LIMPIA_LISTA, CANCELLED). Si se omite, muestra todas las activas no archivadas."""
   estado: String
+  """true para incluir o consultar específicamente archivadas; false por defecto (solo activas en el tablero)"""
+  archivadaRecepcion: Boolean
   llegadaDesde: String
   llegadaHasta: String
   alojamientoId: Int
