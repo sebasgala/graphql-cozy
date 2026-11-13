@@ -417,6 +417,7 @@ type TitularRecepcion {
   nombre: String!
   email: String!
   tipoDocumento: String
+  identificacion: String
   documentoRegistrado: Boolean!
 }
 
