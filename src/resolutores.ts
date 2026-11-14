@@ -131,12 +131,12 @@ export const OPERACIONES: Record<string, Operacion> = {
   },
   alojamientosAdmin: {
     tipo: 'Query',
-    acceso: 'admin',
+    acceso: 'recepcion',
     resolver: (a, c) => catalogo(c, 'GET', '/admin/alojamientos', { consulta: a.filtro ?? {} }),
   },
   alojamientoAdmin: {
     tipo: 'Query',
-    acceso: 'admin',
+    acceso: 'recepcion',
     resolver: (a, c) => catalogo(c, 'GET', `/admin/alojamientos/${seg(a.id)}`, { consulta: { incluirInactivas: a.incluirInactivas } }),
   },
   crearAlojamiento: {
@@ -169,7 +169,7 @@ export const OPERACIONES: Record<string, Operacion> = {
   },
   habitaciones: {
     tipo: 'Query',
-    acceso: 'admin',
+    acceso: 'recepcion',
     resolver: (a, c) => catalogo(c, 'GET', `/admin/alojamientos/${seg(a.alojamientoId)}/habitaciones`, { consulta: { incluirInactivas: a.incluirInactivas || undefined } }),
   },
   habitacion: {
@@ -201,7 +201,7 @@ export const OPERACIONES: Record<string, Operacion> = {
   // ───────────────────────── Disponibilidad ─────────────────────────
   disponibilidadAdmin: {
     tipo: 'Query',
-    acceso: 'admin',
+    acceso: 'recepcion',
     resolver: (a, c) => disponibilidad(c, 'GET', `/admin/habitaciones/${seg(a.habitacionId)}/disponibilidad`, { consulta: { desde: a.desde, hasta: a.hasta } }),
   },
   editarDisponibilidad: {
@@ -346,6 +346,11 @@ export const OPERACIONES: Record<string, Operacion> = {
     acceso: 'superadmin',
     resolver: (a, c) => usuarios(c, 'GET', '/admin/usuarios', { consulta: a.filtro ?? {} }),
   },
+  crearUsuarioAdmin: {
+    tipo: 'Mutation',
+    acceso: 'superadmin',
+    resolver: (a, c) => usuarios(c, 'POST', '/admin/usuarios', { cuerpo: a.datos }),
+  },
   aprobarUsuario: {
     tipo: 'Mutation',
     acceso: 'superadmin',
@@ -364,7 +369,10 @@ export const OPERACIONES: Record<string, Operacion> = {
   cambiarRolUsuario: {
     tipo: 'Mutation',
     acceso: 'superadmin',
-    resolver: (a, c) => usuarios(c, 'PATCH', `/admin/usuarios/${seg(a.id)}/rol`, { cuerpo: { rol: a.rol } }),
+    resolver: (a, c) =>
+      usuarios(c, 'PATCH', `/admin/usuarios/${seg(a.id)}/rol`, {
+        cuerpo: { rol: a.rol, ...(a.alojamientoId !== undefined && { alojamientoId: a.alojamientoId }) },
+      }),
   },
 };
 

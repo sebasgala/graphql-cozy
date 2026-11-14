@@ -19,7 +19,7 @@ describe('graphql (fase 9, paso 9.5a)', () => {
   const firmarToken = (carga: Record<string, unknown>, clavePrivada = parRsa.privateKey): string =>
     jwt.sign(carga, { privateKey: clavePrivada, algorithm: 'RS256' });
 
-  it('1. schema.graphql tiene exactamente las 48 operaciones (§3 + 11 de recepción del Bloque R: 21 queries, 27 mutations)', () => {
+  it('1. schema.graphql tiene exactamente las 49 operaciones (§3 + 11 de recepción del Bloque R + crearUsuarioAdmin: 21 queries, 28 mutations)', () => {
     const schema = cargarEsquema();
     const queryFields = schema.getQueryType()?.getFields() ?? {};
     const mutationFields = schema.getMutationType()?.getFields() ?? {};
@@ -28,8 +28,8 @@ describe('graphql (fase 9, paso 9.5a)', () => {
     const mutations = Object.keys(mutationFields);
 
     assert.equal(queries.length, 21, `Esperadas 21 queries, encontradas ${queries.length}: ${queries.join(', ')}`);
-    assert.equal(mutations.length, 27, `Esperadas 27 mutaciones, encontradas ${mutations.length}: ${mutations.join(', ')}`);
-    assert.equal(Object.keys(OPERACIONES).length, 48, 'OPERACIONES debe registrar 48 resolutores');
+    assert.equal(mutations.length, 28, `Esperadas 28 mutaciones, encontradas ${mutations.length}: ${mutations.join(', ')}`);
+    assert.equal(Object.keys(OPERACIONES).length, 49, 'OPERACIONES debe registrar 49 resolutores');
 
     for (const [nombre, op] of Object.entries(OPERACIONES)) {
       if (op.tipo === 'Query') {

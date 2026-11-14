@@ -132,6 +132,8 @@ type Mutation {
   iniciarSesion(email: String!, password: String!): Sesion
   """POST /auth/renovar con el Bearer vigente. Cuenta con sesión."""
   renovarSesion: Sesion
+  """POST /admin/usuarios. Solo superadmin."""
+  crearUsuarioAdmin(datos: CrearUsuarioAdminInput!): CuentaCreada!
   """POST /admin/usuarios/:id/aprobar. Solo superadmin."""
   aprobarUsuario(id: ID!): Usuario
   """POST /admin/usuarios/:id/suspender. Solo superadmin."""
@@ -139,7 +141,7 @@ type Mutation {
   """POST /admin/usuarios/:id/reactivar. Solo superadmin."""
   reactivarUsuario(id: ID!): Usuario
   """PATCH /admin/usuarios/:id/rol. Solo superadmin."""
-  cambiarRolUsuario(id: ID!, rol: String!): Usuario
+  cambiarRolUsuario(id: ID!, rol: String!, alojamientoId: Int): Usuario
 }
 
 # ───────────────────────── Tipos de salida ─────────────────────────
@@ -405,6 +407,19 @@ type Usuario {
   createdAt: String!
 }
 
+type CuentaCreada {
+  id: ID!
+  email: String!
+  nombre: String!
+  apellido: String!
+  rol: String!
+  estado: String!
+  alojamientoId: Int
+  requiereCambioClave: Boolean
+  claveTemporal: String
+  createdAt: String!
+}
+
 # Recepción (dueño: reservas)
 
 type ContextoRecepcion {
@@ -666,6 +681,15 @@ input RegistroInput {
   nombre: String!
   apellido: String!
   rol: String
+}
+
+input CrearUsuarioAdminInput {
+  email: String!
+  nombre: String!
+  apellido: String!
+  password: String
+  rol: String!
+  alojamientoId: Int
 }
 
 input FiltroUsuariosInput {
